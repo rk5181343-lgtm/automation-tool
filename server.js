@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runCEO } from './src/ceo.js';
+import { executePlan, reviewResults } from './src/runner.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, 'public');
@@ -32,11 +33,13 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/ceo/run') {
       const body = await readBody(req);
-      if (!body.goal || typeof body.goal !== 'string') {
-        return send(res, 400, { error: 'goal is required' });
-      }
-      const result = await runCEO({ goal: body.goal, data: body.data ?? null });
-      return send(res, 200, result);
+      if (!body.goal || typeof body.goal !== 'string') return send(res, 400, { error: 'goal is required' });
+
+      const plan = await runCEO({ goal: body.goal, data: body.data ?? null });
+      const results = await executePlan({ goal: body.goal, plan: plan.plan });
+      const review = await reviewResults({ goal: body.goal, plan: plan.plan, results });
+
+      return send(res, 200, { ...plan, status: 'executed', results, review });
     }
 
     if (req.method === 'GET') {
